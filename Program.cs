@@ -15,38 +15,110 @@ class SnakeGame
 
     static async Task Main(string[] args)
     {
-        bool isTrain = false;
-        ai = new SnakeAI(0);
+        await AutoPlay();
+        // await TrainProcess(false);
+    }
+
+    static async Task AutoPlay()
+    {
+        QLearningApproximator qFunc = new QLearningApproximator("./train_2.json");
+        int episodes = 10; // 訓練的回合數
+        for (int i = 0; i < episodes; i++)
+        {
+            Console.WriteLine($"Episode {i + 1}/{episodes}");
+            StartGame();
+            bool isWin = false;
+            while (!isEnd)
+            {
+                // 獲取當前狀態
+                string state = GetState();
+                int[] previousHeadPos = snakeHead;
+                // AI 選擇行動
+                // int action = ai.ChooseAction(state);
+                int action = qFunc.ChooseAction(state);
+                // 執行行動並獲取結果
+                var result = NextStep(action);
+                map = result.map;
+                int reward = result.reward;
+                isEnd = result.isEnd;
+                score = result.score;
+                if (score >= (maxMatric * maxMatric - 3))
+                {
+                    isWin = true;
+                }
+                // 獲取下一個狀態
+                string nextState = GetState();
+                printMap();
+                await Task.Delay(1000);
+            }
+            Console.WriteLine($"Episode {i + 1} ended with score: {score}");
+        }
+        Console.WriteLine("Training completed.");
+    }
+
+    static async Task TrainProcess(bool isTrain = false)
+    {
+        double randomRate = 1;
+        ai = new SnakeAI(isTrain ? randomRate : 0);
 
         if (isTrain)
         {
+            int winCount = 0;
             Console.WriteLine("Starting Snake Game with AI...");
-            int episodes = 10000; // 訓練的回合數
-            for (int i = 0; i < episodes; i++)
+            for (int round = 0; round < 3; round++)
             {
-                Console.WriteLine($"Episode {i + 1}/{episodes}");
-                StartGame();
-                while (!isEnd)
+                int episodes = 10000; // 訓練的回合數
+                for (int i = 0; i < episodes; i++)
                 {
-                    // 獲取當前狀態
-                    string state = GetState();
-                    int[] previousHeadPos = snakeHead;
-                    // AI 選擇行動
-                    int action = ai.ChooseAction(state);
-                    // 執行行動並獲取結果
-                    var result = NextStep(action);
-                    map = result.map;
-                    int reward = result.reward;
-                    isEnd = result.isEnd;
-                    score = result.score;
-                    // 獲取下一個狀態
-                    string nextState = GetState();
-                    // 更新 Q 值
-                    ai.UpdateQValue(state, action, reward, nextState, map, previousHeadPos, isEnd);
+                    Console.WriteLine($"Episode {i + 1}/{episodes}");
+                    StartGame();
+                    int noScoreStep = 0;
+                    bool isWin = false;
+                    while (!isEnd)
+                    {
+                        int previousScore = score;
+                        // 獲取當前狀態
+                        string state = GetState();
+                        int[] previousHeadPos = snakeHead;
+                        // AI 選擇行動
+                        int action = ai.ChooseAction(state);
+                        // 執行行動並獲取結果
+                        var result = NextStep(action);
+                        map = result.map;
+                        int reward = result.reward;
+                        isEnd = result.isEnd;
+                        score = result.score;
+                        if (score == previousScore)
+                        {
+                            noScoreStep++;
+                        }
+                        else
+                        {
+                            noScoreStep = 0;
+                        }
+                        if (noScoreStep > 100)
+                        {
+                            isEnd = true;
+                        }
+                        if (score >= (maxMatric * maxMatric - 3))
+                        {
+                            isWin = true;
+                            winCount++;
+                        }
+                        // 獲取下一個狀態
+                        string nextState = GetState();
+                        // 更新 Q 值
+                        ai.UpdateQValue(state, action, reward, nextState, map, previousHeadPos, isEnd, isWin, noScoreStep, score);
+                        if (isWin)
+                        {
+                            break;
+                        }
+                    }
+                    Console.WriteLine($"Episode {i + 1} ended with score: {score}");
                 }
-                Console.WriteLine($"Episode {i + 1} ended with score: {score}");
             }
             ai.SaveQTable();
+            Console.WriteLine($"win:{winCount}");
             Console.WriteLine("Training completed.");
         }
         else
@@ -56,6 +128,7 @@ class SnakeGame
             {
                 Console.WriteLine($"Episode {i + 1}/{episodes}");
                 StartGame();
+                bool isWin = false;
                 while (!isEnd)
                 {
                     // 獲取當前狀態
@@ -69,17 +142,17 @@ class SnakeGame
                     int reward = result.reward;
                     isEnd = result.isEnd;
                     score = result.score;
+                    if (score >= (maxMatric * maxMatric - 3))
+                    {
+                        isWin = true;
+                    }
                     // 獲取下一個狀態
                     string nextState = GetState();
                     printMap();
                     await Task.Delay(1000);
-                    // 更新 Q 值
-                    ai.UpdateQValue(state, action, reward, nextState, map, previousHeadPos, isEnd);
                 }
                 Console.WriteLine($"Episode {i + 1} ended with score: {score}");
-                Console.ReadKey();
             }
-            ai.SaveQTable();
             Console.WriteLine("Training completed.");
         }
     }

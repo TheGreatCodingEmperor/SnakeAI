@@ -2,6 +2,7 @@ using System;
 using System.Linq;
 using System.Collections.Generic;
 using Microsoft.Data.Sqlite;
+using Newtonsoft.Json;
 
 class SnakeAI
 {
@@ -13,49 +14,71 @@ class SnakeAI
     private double minExplorationRate = 0.1;
     private double explorationDecay = 0.995;
     private Random rand = new Random();
+    public static readonly string filePath = "./train.json";
 
     public SnakeAI(double ExplorationRate)
     {
         explorationRate = ExplorationRate;
-        dbConnection = new SqliteConnection("Data Source=./snake_ai.db;");
-        dbConnection.Open();
-        CreateTable();
+        // dbConnection = new SqliteConnection("Data Source=./snake_ai.db;");
+        // dbConnection.Open();
+        // CreateTable();
         LoadQTable();
     }
 
-    private void CreateTable()
-    {
-        string sql = "CREATE TABLE IF NOT EXISTS QTable (State TEXT PRIMARY KEY, Actions TEXT);";
-        using var command = new SqliteCommand(sql, dbConnection);
-        command.ExecuteNonQuery();
-    }
-
+    // Load QTable from JSON file
     private void LoadQTable()
     {
-        qTable = new Dictionary<string, Dictionary<int, double>>();
-        string sql = "SELECT * FROM QTable";
-        using var command = new SqliteCommand(sql, dbConnection);
-        using var reader = command.ExecuteReader();
-        while (reader.Read())
+        if (File.Exists(filePath))
         {
-            string state = reader.GetString(0);
-            var actions = reader.GetString(1).Split(',').Select(double.Parse).ToList();
-            qTable[state] = new Dictionary<int, double> { { 0, actions[0] }, { 1, actions[1] }, { 2, actions[2] }, { 3, actions[3] } };
+            string json = File.ReadAllText(filePath);
+            qTable = JsonConvert.DeserializeObject<Dictionary<string, Dictionary<int, double>>>(json);
+        }
+        else
+        {
+            qTable = new Dictionary<string, Dictionary<int, double>>();
         }
     }
 
+    // Save QTable to JSON file
     public void SaveQTable()
     {
-        foreach (var state in qTable)
-        {
-            string actions = string.Join(",", state.Value.Values);
-            string sql = "INSERT OR REPLACE INTO QTable (State, Actions) VALUES (@state, @actions)";
-            using var command = new SqliteCommand(sql, dbConnection);
-            command.Parameters.AddWithValue("@state", state.Key);
-            command.Parameters.AddWithValue("@actions", actions);
-            command.ExecuteNonQuery();
-        }
+        string json = JsonConvert.SerializeObject(qTable, Formatting.Indented);
+        File.WriteAllText(filePath, json);
     }
+
+    // private void CreateTable()
+    // {
+    //     string sql = "CREATE TABLE IF NOT EXISTS QTable (State TEXT PRIMARY KEY, Actions TEXT);";
+    //     using var command = new SqliteCommand(sql, dbConnection);
+    //     command.ExecuteNonQuery();
+    // }
+
+    // private void LoadQTable()
+    // {
+    //     qTable = new Dictionary<string, Dictionary<int, double>>();
+    //     string sql = "SELECT * FROM QTable";
+    //     using var command = new SqliteCommand(sql, dbConnection);
+    //     using var reader = command.ExecuteReader();
+    //     while (reader.Read())
+    //     {
+    //         string state = reader.GetString(0);
+    //         var actions = reader.GetString(1).Split(',').Select(double.Parse).ToList();
+    //         qTable[state] = new Dictionary<int, double> { { 0, actions[0] }, { 1, actions[1] }, { 2, actions[2] }, { 3, actions[3] } };
+    //     }
+    // }
+
+    // public void SaveQTable()
+    // {
+    //     foreach (var state in qTable)
+    //     {
+    //         string actions = string.Join(",", state.Value.Values);
+    //         string sql = "INSERT OR REPLACE INTO QTable (State, Actions) VALUES (@state, @actions)";
+    //         using var command = new SqliteCommand(sql, dbConnection);
+    //         command.Parameters.AddWithValue("@state", state.Key);
+    //         command.Parameters.AddWithValue("@actions", actions);
+    //         command.ExecuteNonQuery();
+    //     }
+    // }
 
     public int ChooseAction(string state)
     {
@@ -81,7 +104,18 @@ class SnakeAI
     //     explorationRate = Math.Max(minExplorationRate, explorationRate * explorationDecay);
     //     SaveQTable();
     // }
-    public void UpdateQValue(string state, int action, double reward, string nextState, int[][] map, int[] previousHeadPosition, bool isGameOver)
+    public void UpdateQValue(
+        string state,
+        int action,
+        double reward,
+        string nextState,
+        int[][] map,
+        int[] previousHeadPosition,
+        bool isGameOver,
+        bool isWin,
+        int noScoreStep,
+        int score
+        )
     {
         // 初始化狀態的 Q 值
         if (!qTable.ContainsKey(state))
@@ -94,15 +128,29 @@ class SnakeAI
         double currentDistance = CalculateDistance(currentHeadPosition, foodPosition);
 
         // 如果蛇頭比上一步更接近餅乾，則增加獎勵
-        if (currentDistance < previousDistance)
-        {
-            reward += 1;
+        // if (currentDistance < previousDistance)
+        // {
+        //     reward += 1;
+        // }
+
+        // 預防下一步自殺
+
+
+        int allMapLength = map[0].Length * map.Length;
+        if(noScoreStep>=allMapLength*3){
+            reward = -1 * (noScoreStep-(allMapLength*2));
         }
 
         // 如果遊戲結束，則給予大的負獎勵
         if (isGameOver)
         {
-            reward -= 10;
+            reward -= 100;
+        }
+        else{
+            reward += 1;
+        }
+        if(isWin){
+            reward += 1000;
         }
 
         // 獲取當前狀態下該行動的舊 Q 值
