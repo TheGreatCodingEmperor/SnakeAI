@@ -15,11 +15,11 @@ class SnakeGame
 
     static async Task Main(string[] args)
     {
-        await AutoPlay();
-        // await TrainProcess(false);
+        // await LinearEquationAutoPlay();
+        await TrainProcess(false);
     }
 
-    static async Task AutoPlay()
+    static async Task LinearEquationAutoPlay()
     {
         QLearningApproximator qFunc = new QLearningApproximator("./train_2.json");
         int episodes = 10; // 訓練的回合數
@@ -49,7 +49,7 @@ class SnakeGame
                 // 獲取下一個狀態
                 string nextState = GetState();
                 printMap();
-                await Task.Delay(1000);
+                await Task.Delay(500);
             }
             Console.WriteLine($"Episode {i + 1} ended with score: {score}");
         }
@@ -65,7 +65,7 @@ class SnakeGame
         {
             int winCount = 0;
             Console.WriteLine("Starting Snake Game with AI...");
-            for (int round = 0; round < 3; round++)
+            for (int round = 0; round < 100; round++)
             {
                 int episodes = 10000; // 訓練的回合數
                 for (int i = 0; i < episodes; i++)
